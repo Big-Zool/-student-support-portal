@@ -1,0 +1,228 @@
+import { useState, useEffect } from 'react';
+import { formatDistanceToNow } from 'date-fns';
+import { Plus, MessageSquare, Sun, Moon } from 'lucide-react';
+import { useTheme } from 'next-themes';
+import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
+import { Button } from './ui/button';
+import { ScrollArea } from './ui/scroll-area';
+import { Skeleton } from './ui/skeleton';
+import { StatusBadge } from './StatusBadge';
+import { ChatArea } from './ChatArea';
+import { NewConversationDialog } from './NewConversationDialog';
+import type { Conversation, ConversationStatus } from './types';
+import { INITIAL_CONVERSATIONS, STUDENT_EMAIL } from './types';
+import { cn } from './ui/utils';
+
+function ConversationSkeleton() {
+  return (
+    <div className="flex flex-col gap-3 p-3">
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="p-3 rounded-lg border border-slate-100 dark:border-slate-800 flex flex-col gap-2">
+          <div className="flex items-center justify-between">
+            <Skeleton className="h-4 w-36 rounded" />
+            <Skeleton className="h-5 w-14 rounded-full" />
+          </div>
+          <Skeleton className="h-3 w-full rounded" />
+          <Skeleton className="h-3 w-3/4 rounded" />
+          <Skeleton className="h-3 w-16 rounded" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function StudentInbox() {
+  const [conversations, setConversations] = useState<Conversation[]>(
+    INITIAL_CONVERSATIONS.filter((c) => c.studentEmail === STUDENT_EMAIL)
+  );
+  const [selectedId, setSelectedId] = useState<string | null>(conversations[0]?.id ?? null);
+  const [statusFilter, setStatusFilter] = useState<ConversationStatus | 'all'>('all');
+  const [isLoading, setIsLoading] = useState(true);
+  const [newConvOpen, setNewConvOpen] = useState(false);
+  const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
+  const { resolvedTheme, setTheme } = useTheme();
+
+  useEffect(() => {
+    const t = setTimeout(() => setIsLoading(false), 1500);
+    return () => clearTimeout(t);
+  }, []);
+
+  const filtered = conversations.filter((c) =>
+    statusFilter === 'all' ? true : c.status === statusFilter
+  );
+
+  const selected = conversations.find((c) => c.id === selectedId) ?? null;
+
+  const handleSelectConv = (id: string) => {
+    setSelectedId(id);
+    setMobileView('chat');
+  };
+
+  const handleSendMessage = (convId: string, content: string) => {
+    setConversations((prev) =>
+      prev.map((c) =>
+        c.id === convId
+          ? {
+              ...c,
+              lastMessage: content,
+              lastMessageTime: new Date(),
+              messages: [
+                ...c.messages,
+                {
+                  id: `m-${Date.now()}`,
+                  content,
+                  sender: 'student',
+                  senderName: 'Emma Chen',
+                  timestamp: new Date(),
+                },
+              ],
+            }
+          : c
+      )
+    );
+  };
+
+  const handleCreate = (subject: string, message: string) => {
+    const newConv: Conversation = {
+      id: `conv-${Date.now()}`,
+      subject,
+      status: 'open',
+      studentName: 'Emma Chen',
+      studentEmail: STUDENT_EMAIL,
+      assignee: null,
+      lastMessage: message,
+      lastMessageTime: new Date(),
+      messages: [
+        {
+          id: `m-${Date.now()}`,
+          content: message,
+          sender: 'student',
+          senderName: 'Emma Chen',
+          timestamp: new Date(),
+        },
+      ],
+    };
+    setConversations((prev) => [newConv, ...prev]);
+    setSelectedId(newConv.id);
+    setMobileView('chat');
+  };
+
+  const tabs: { value: ConversationStatus | 'all'; label: string }[] = [
+    { value: 'all', label: 'All' },
+    { value: 'open', label: 'Open' },
+    { value: 'pending', label: 'Pending' },
+    { value: 'closed', label: 'Closed' },
+  ];
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* Top bar */}
+      <div className="flex-shrink-0 px-4 py-3 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between transition-colors duration-200">
+        <div className="flex items-center gap-2">
+          <div className="w-7 h-7 rounded-lg bg-violet-600 flex items-center justify-center">
+            <MessageSquare className="w-3.5 h-3.5 text-white" />
+          </div>
+          <h1 className="text-sm font-semibold text-slate-900 dark:text-slate-50">My Support Chats</h1>
+          <button
+            onClick={() => setTheme(resolvedTheme === 'dark' ? 'light' : 'dark')}
+            aria-label="Toggle dark mode"
+            className="p-1.5 rounded-md text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all cursor-pointer"
+          >
+            {resolvedTheme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
+        </div>
+        <Button size="sm" className="h-8 text-xs gap-1.5" onClick={() => setNewConvOpen(true)}>
+          <Plus className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">New Conversation</span>
+          <span className="sm:hidden">New</span>
+        </Button>
+      </div>
+
+      <div className="flex flex-1 overflow-hidden min-h-0">
+        {/* Sidebar */}
+        <div
+          className={cn(
+            'flex flex-col border-r border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 transition-colors duration-200',
+            'w-full md:w-72 lg:w-80 flex-shrink-0',
+            mobileView === 'chat' ? 'hidden md:flex' : 'flex'
+          )}
+        >
+          {/* Status tabs */}
+          <div className="px-3 pt-3 pb-2 flex-shrink-0">
+            <Tabs value={statusFilter} onValueChange={(v) => setStatusFilter(v as ConversationStatus | 'all')}>
+              <TabsList className="w-full grid grid-cols-4 h-8">
+                {tabs.map((tab) => (
+                  <TabsTrigger key={tab.value} value={tab.value} className="text-xs py-1">
+                    {tab.label}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          </div>
+
+          {/* Conversation list */}
+          <ScrollArea className="flex-1">
+            {isLoading ? (
+              <ConversationSkeleton />
+            ) : filtered.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-12 px-4 text-center">
+                <MessageSquare className="w-8 h-8 text-slate-300 dark:text-slate-600" />
+                <p className="text-sm text-slate-400 dark:text-slate-500">No conversations here</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1 p-2">
+                {filtered.map((conv) => (
+                  <button
+                    key={conv.id}
+                    onClick={() => handleSelectConv(conv.id)}
+                    className={cn(
+                      'w-full text-left p-3 rounded-lg border transition-all duration-100',
+                      selectedId === conv.id
+                        ? 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 shadow-sm'
+                        : 'border-transparent hover:bg-slate-50 dark:hover:bg-slate-800 hover:border-slate-100 dark:hover:border-slate-700'
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                      <p className="text-sm font-medium text-slate-800 dark:text-slate-100 leading-tight line-clamp-1">
+                        {conv.subject}
+                      </p>
+                      <StatusBadge status={conv.status} />
+                    </div>
+                    <p className="text-xs text-slate-400 dark:text-slate-500 line-clamp-2 leading-relaxed mb-1.5">
+                      {conv.lastMessage}
+                    </p>
+                    <p className="text-[10px] text-slate-300 dark:text-slate-600">
+                      {formatDistanceToNow(conv.lastMessageTime, { addSuffix: true })}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </ScrollArea>
+        </div>
+
+        {/* Chat area */}
+        <div
+          className={cn(
+            'flex-1 flex flex-col overflow-hidden min-h-0',
+            mobileView === 'list' ? 'hidden md:flex' : 'flex'
+          )}
+        >
+          <ChatArea
+            conversation={selected}
+            role="student"
+            isLoading={isLoading}
+            onSendMessage={handleSendMessage}
+            onBack={() => setMobileView('list')}
+          />
+        </div>
+      </div>
+
+      <NewConversationDialog
+        open={newConvOpen}
+        onOpenChange={setNewConvOpen}
+        onCreate={handleCreate}
+      />
+    </div>
+  );
+}

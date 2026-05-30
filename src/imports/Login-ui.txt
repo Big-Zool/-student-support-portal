@@ -1,0 +1,72 @@
+Login
++--------------------------------------------------+
+| Student Support Chat                             |
+|--------------------------------------------------|
+| Email                                            |
+| [ student@example.com                         ]  |
+| Password                                         |
+| [ ********                                    ]  |
+|                                                  |
+| [ Login ]                         [ Sign up ]    |
++--------------------------------------------------+
+Student Inbox
++--------------------------------------------------------------------------------+
+| Support Chat                                                [ New Conversation ] |
+|--------------------------------------------------------------------------------|
+| Tabs: [ Open ] [ Pending ] [ Closed ]                                           |
+|                                                                                |
+| +-----------------------------+  +--------------------------------------------+ |
+| | My Conversations            |  | Selected Conversation                      | |
+| |-----------------------------|  |--------------------------------------------| |
+| | Admission question   Open   |  | Admission question                  Open  | |
+| | Visa documents      Pending |  |                                            | |
+| | Tuition fee         Closed  |  | Student: I need help choosing a program.  | |
+| |                             |  | Sales: Can you share your target country? | |
+| |                             |  |                                            | |
+| |                             |  | [ Type a message...                    ] | |
+| |                             |  |                              [ Send ]      | |
+| +-----------------------------+  +--------------------------------------------+ |
++--------------------------------------------------------------------------------+
+Sales Inbox
++--------------------------------------------------------------------------------+
+| Sales Inbox                           [ Unassigned ] [ Mine ] [ All: Manager ]   |
+|--------------------------------------------------------------------------------|
+| Filters: Status [ Open v ] Search [ admission                       ]           |
+|                                                                                |
+| +--------------------------------------+ +-------------------------------------+ |
+| | Queue                                | | Conversation                        | |
+| |--------------------------------------| |-------------------------------------| |
+| | New student question    Unassigned   | | New student question          Open  | |
+| | Visa question           Me           | | Owner: Unassigned                   | |
+| | Dormitory               Aigerim      | |                                     | |
+| |                                      | | [ Assign to me ] [ Reassign ]       | |
+| |                                      | |                                     | |
+| |                                      | | Student: Hello, I need help.        | |
+| |                                      | | Team: Sure, we can help.            | |
+| |                                      | |                                     | |
+| |                                      | | [ Reply...                       ]  | |
+| |                                      | |                         [ Send ]     | |
+| +--------------------------------------+ +-------------------------------------+ |
++--------------------------------------------------------------------------------+
+New Conversation Dialog
++----------------------------------------------+
+| New Conversation                             |
+|----------------------------------------------|
+| Subject                                      |
+| [ Admission requirements                  ]  |
+| Message                                      |
+| [ Write your question...                  ]  |
+| [                                          ] |
+|                                              |
+|                       [ Cancel ] [ Create ]  |
++----------------------------------------------+
+Manager Reassignment Dialog
++----------------------------------------------+
+| Reassign Conversation                        |
+|----------------------------------------------|
+| Current owner: Aigerim                       |
+| New owner                                    |
+| [ Select sales user v                     ]  |
+|                                              |
+|                     [ Cancel ] [ Reassign ]  |
++----------------------------------------------+
