@@ -27,6 +27,7 @@ app.use('/api/*', authMiddleware);
 
 // Register routes
 app.route('/api/me', users);
+app.route('/api/users', users);
 app.route('/api/conversations', conversations);
 app.route('/api/conversations', messages); // messages are nested under /conversations/:threadId/messages
 

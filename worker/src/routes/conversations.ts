@@ -10,6 +10,9 @@ export const conversations = new Hono<{ Bindings: Env; Variables: AuthVariables 
 conversations.get('/', async (c) => {
   const supabase = getSupabaseAdmin(c.env);
   const profile = c.get('profile');
+  const status = c.req.query('status');
+  const assignedTo = c.req.query('assignedTo');
+  const search = c.req.query('q')?.trim();
 
   // We start a query on the conversation_threads table, joining with the student and assigned user profiles
   let query = supabase
@@ -21,6 +24,14 @@ conversations.get('/', async (c) => {
     `)
     .order('last_message_at', { ascending: false });
 
+  if (status && ['open', 'pending', 'closed'].includes(status)) {
+    query = query.eq('status', status);
+  }
+
+  if (search) {
+    query = query.ilike('subject', `%${search}%`);
+  }
+
   // Role-based filtering:
   if (profile.role === 'student') {
     // Students only see their own threads
@@ -30,6 +41,14 @@ conversations.get('/', async (c) => {
     query = query.or(`assigned_to.eq.${profile.id},assigned_to.is.null`);
   }
   // Managers see all threads (no filtering needed)
+
+  if (assignedTo === 'unassigned') {
+    query = query.is('assigned_to', null);
+  } else if (assignedTo === 'me') {
+    query = query.eq('assigned_to', profile.id);
+  } else if (assignedTo) {
+    query = query.eq('assigned_to', assignedTo);
+  }
 
   const { data, error } = await query;
   if (error) return c.json({ error: error.message }, 500);

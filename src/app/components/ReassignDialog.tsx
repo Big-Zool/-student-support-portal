@@ -22,13 +22,13 @@ interface ReassignDialogProps {
 export function ReassignDialog({ open, onOpenChange, currentAssignee, onConfirm }: ReassignDialogProps) {
   const [selectedId, setSelectedId] = useState('');
 
-  const { data: users = [] } = useQuery({
+  const { data: users = [], isLoading, error } = useQuery({
     queryKey: ['users'],
     queryFn: getUsers,
     enabled: open,
   });
 
-  const teamMembers = users.filter((u) => u.role === 'sales' || u.role === 'manager');
+  const teamMembers = users.filter((u) => u.role === 'sales');
 
   const handleConfirm = () => {
     if (selectedId) {
@@ -57,6 +57,7 @@ export function ReassignDialog({ open, onOpenChange, currentAssignee, onConfirm 
                 <SelectValue placeholder="Select a team member…" />
               </SelectTrigger>
               <SelectContent>
+                {isLoading && <SelectItem value="loading" disabled>Loading team...</SelectItem>}
                 {teamMembers
                   .filter((member) => member.full_name !== currentAssignee) // Exclude current
                   .map((member) => (
@@ -66,6 +67,9 @@ export function ReassignDialog({ open, onOpenChange, currentAssignee, onConfirm 
                   ))}
               </SelectContent>
             </Select>
+            {error instanceof Error && (
+              <p className="text-xs text-rose-500">{error.message}</p>
+            )}
           </div>
         </div>
         <DialogFooter className="gap-2">

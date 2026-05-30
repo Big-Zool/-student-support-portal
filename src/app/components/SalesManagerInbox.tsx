@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
-import { Search, Inbox, Sun, Moon } from 'lucide-react';
+import { AlertCircle, Search, Inbox, Sun, Moon } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
@@ -12,9 +12,15 @@ import { Avatar, AvatarFallback } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { StatusBadge } from './StatusBadge';
 import { ChatArea } from './ChatArea';
-import type { ConversationStatus, Role } from './types';
+import type { ConversationPreview, ConversationStatus, Role } from './types';
 import { cn } from './ui/utils';
-import { getConversations, updateConversationStatus, assignConversation } from '../../lib/apiClient';
+import {
+  getConversations,
+  updateConversationStatus,
+  assignConversation,
+  type ApiConversationThread,
+  type ConversationFilters,
+} from '../../lib/apiClient';
 import { useAuth } from '../auth/AuthContext';
 
 type QueueTab = 'unassigned' | 'mine' | 'all';
@@ -79,40 +85,43 @@ export function SalesManagerInbox({ role }: SalesManagerInboxProps) {
   const { profile } = useAuth();
   const currentUserName = profile?.full_name || '';
 
-  const { data: apiConversations = [], isLoading } = useQuery({
-    queryKey: ['conversations'],
-    queryFn: getConversations,
+  const assignedToFilter: ConversationFilters['assignedTo'] =
+    queueTab === 'all' ? 'all' : queueTab === 'mine' ? 'me' : 'unassigned';
+
+  const { data: apiConversations = [], isLoading, isError, error } = useQuery({
+    queryKey: ['conversations', { status: statusFilter, assignedTo: assignedToFilter }],
+    queryFn: () => getConversations({ status: statusFilter, assignedTo: assignedToFilter }),
   });
 
   const assignMutation = useMutation({
     mutationFn: ({ threadId, assignedTo }: { threadId: string; assignedTo: string | null }) =>
       assignConversation(threadId, assignedTo),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['conversations'] }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['conversation', variables.threadId] });
+    },
   });
 
   const statusMutation = useMutation({
     mutationFn: ({ threadId, status }: { threadId: string; status: ConversationStatus }) =>
       updateConversationStatus(threadId, status),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['conversations'] }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      queryClient.invalidateQueries({ queryKey: ['conversation', variables.threadId] });
+    },
   });
 
-  const mappedConversations = apiConversations.map((c: any) => ({
+  const mappedConversations: ConversationPreview[] = apiConversations.map((c: ApiConversationThread) => ({
     id: c.id,
     subject: c.subject,
     status: c.status,
     studentName: c.student?.full_name || 'Student',
-    studentEmail: '', // Not returned in list by default
     assignee: c.assigned?.full_name || null,
     assigneeId: c.assigned?.id || null,
-    lastMessage: 'New activity...',
     lastMessageTime: new Date(c.last_message_at),
-    messages: [], // Handled by ChatArea
   }));
 
   const filtered = mappedConversations.filter((c) => {
-    if (queueTab === 'unassigned' && c.assignee !== null) return false;
-    if (queueTab === 'mine' && c.assignee !== currentUserName) return false;
-    if (statusFilter !== 'all' && c.status !== statusFilter) return false;
     if (search.trim()) {
       const q = search.toLowerCase();
       if (!c.subject.toLowerCase().includes(q) && !c.studentName.toLowerCase().includes(q)) return false;
@@ -224,6 +233,14 @@ export function SalesManagerInbox({ role }: SalesManagerInboxProps) {
           <ScrollArea className="flex-1">
             {isLoading ? (
               <SidebarSkeleton />
+            ) : isError ? (
+              <div className="flex flex-col items-center gap-2 py-12 px-4 text-center">
+                <AlertCircle className="w-8 h-8 text-rose-400" />
+                <p className="text-sm text-slate-500 dark:text-slate-400">Could not load conversations</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500">
+                  {error instanceof Error ? error.message : 'Please try again.'}
+                </p>
+              </div>
             ) : filtered.length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-12 px-4 text-center">
                 <Inbox className="w-8 h-8 text-slate-300 dark:text-slate-600" />
@@ -295,7 +312,6 @@ export function SalesManagerInbox({ role }: SalesManagerInboxProps) {
             onStatusChange={handleStatusChange}
             onReassign={handleReassign}
             onBack={() => setMobileView('list')}
-            onSendMessage={() => {}} // Handled internally
           />
         </div>
       </div>

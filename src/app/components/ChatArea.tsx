@@ -1,6 +1,6 @@
 import { useRef, useEffect, useState } from 'react';
 import { format } from 'date-fns';
-import { Send, ArrowLeft, UserCheck, RefreshCw } from 'lucide-react';
+import { AlertCircle, Send, ArrowLeft, UserCheck, RefreshCw } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
@@ -10,18 +10,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Skeleton } from './ui/skeleton';
 import { StatusBadge } from './StatusBadge';
 import { ReassignDialog } from './ReassignDialog';
-import type { ConversationStatus, Role } from './types';
+import type { ConversationPreview, ConversationStatus, Role } from './types';
 import { cn } from './ui/utils';
-import { getConversation, sendMessage } from '../../lib/apiClient';
+import { getConversation, sendMessage, type ApiMessage } from '../../lib/apiClient';
 
 interface ChatAreaProps {
-  conversation: any | null; // We pass the basic thread info from the list
+  conversation: ConversationPreview | null;
   role: Role;
   onAssignToMe?: (convId: string) => void;
   onStatusChange?: (convId: string, status: ConversationStatus) => void;
   onReassign?: (convId: string, agent: string) => void;
   onBack?: () => void;
-  onSendMessage?: any; // Kept for prop compatibility but unused
 }
 
 function getInitials(name: string) {
@@ -75,7 +74,7 @@ export function ChatArea({
   const bottomRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
 
-  const { data: fullConv, isLoading } = useQuery({
+  const { data: fullConv, isLoading, isError, error } = useQuery({
     queryKey: ['conversation', previewConv?.id],
     queryFn: () => getConversation(previewConv!.id),
     enabled: !!previewConv?.id,
@@ -120,6 +119,22 @@ export function ChatArea({
           <p className="text-slate-700 dark:text-slate-300 font-medium">No conversation selected</p>
           <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
             Choose a conversation from the list, or start a new one.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-8 bg-slate-50/50 dark:bg-slate-950/50 transition-colors duration-200">
+        <div className="w-14 h-14 rounded-2xl bg-rose-50 dark:bg-rose-950/40 flex items-center justify-center">
+          <AlertCircle className="w-6 h-6 text-rose-400" />
+        </div>
+        <div>
+          <p className="text-slate-700 dark:text-slate-300 font-medium">Could not load this conversation</p>
+          <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
+            {error instanceof Error ? error.message : 'Please select it again or refresh.'}
           </p>
         </div>
       </div>
@@ -211,7 +226,7 @@ export function ChatArea({
       {/* Messages */}
       <ScrollArea className="flex-1 min-h-0">
         <div className="px-4 py-4 flex flex-col gap-4">
-          {conversation.messages?.map((msg: any) => {
+          {conversation.messages?.map((msg: ApiMessage) => {
             const isStudent = msg.sender_type === 'student';
             const senderName = msg.sender?.full_name || 'Unknown';
             return (
@@ -277,7 +292,10 @@ export function ChatArea({
             <span className="hidden sm:inline ml-1">Send</span>
           </Button>
         </div>
-        <p className="text-[10px] text-slate-400 dark:text-slate-600 mt-1.5">Press ⌘↵ to send quickly</p>
+        {sendMutation.error instanceof Error && (
+          <p className="text-xs text-rose-500 mt-1.5">{sendMutation.error.message}</p>
+        )}
+        <p className="text-[10px] text-slate-400 dark:text-slate-600 mt-1.5">Press Ctrl+Enter to send quickly</p>
       </div>
 
       <ReassignDialog

@@ -15,24 +15,29 @@ import { Loader2 } from 'lucide-react';
 interface NewConversationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onCreate: (subject: string, message: string) => void;
+  onCreate: (subject: string, message: string) => Promise<boolean>;
+  isCreating?: boolean;
+  error?: string | null;
 }
 
-export function NewConversationDialog({ open, onOpenChange, onCreate }: NewConversationDialogProps) {
+export function NewConversationDialog({
+  open,
+  onOpenChange,
+  onCreate,
+  isCreating = false,
+  error = null,
+}: NewConversationDialogProps) {
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
-  const [isCreating, setIsCreating] = useState(false);
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     if (!subject.trim() || !message.trim()) return;
-    setIsCreating(true);
-    setTimeout(() => {
-      onCreate(subject.trim(), message.trim());
+    const created = await onCreate(subject.trim(), message.trim());
+    if (created) {
       setSubject('');
       setMessage('');
-      setIsCreating(false);
       onOpenChange(false);
-    }, 800);
+    }
   };
 
   return (
@@ -62,6 +67,9 @@ export function NewConversationDialog({ open, onOpenChange, onCreate }: NewConve
               className="resize-none"
             />
           </div>
+          {error && (
+            <p className="text-sm text-rose-500">{error}</p>
+          )}
         </div>
         <DialogFooter className="gap-2">
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isCreating}>

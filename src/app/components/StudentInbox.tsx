@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
-import { Plus, MessageSquare, Sun, Moon } from 'lucide-react';
+import { AlertCircle, Plus, MessageSquare, Sun, Moon } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
@@ -10,9 +10,9 @@ import { Skeleton } from './ui/skeleton';
 import { StatusBadge } from './StatusBadge';
 import { ChatArea } from './ChatArea';
 import { NewConversationDialog } from './NewConversationDialog';
-import type { ConversationStatus } from './types';
+import type { ConversationPreview, ConversationStatus } from './types';
 import { cn } from './ui/utils';
-import { getConversations, createConversation } from '../../lib/apiClient';
+import { getConversations, createConversation, type ApiConversationThread } from '../../lib/apiClient';
 
 function ConversationSkeleton() {
   return (
@@ -39,9 +39,9 @@ export function StudentInbox() {
   const { resolvedTheme, setTheme } = useTheme();
   const queryClient = useQueryClient();
 
-  const { data: conversations = [], isLoading } = useQuery({
-    queryKey: ['conversations'],
-    queryFn: getConversations,
+  const { data: conversations = [], isLoading, isError, error } = useQuery({
+    queryKey: ['conversations', { status: statusFilter }],
+    queryFn: () => getConversations({ status: statusFilter }),
   });
 
   const createMutation = useMutation({
@@ -55,21 +55,17 @@ export function StudentInbox() {
   });
 
   // Since backend doesn't return the last message body in the list, we just map it.
-  const mappedConversations = conversations.map((c: any) => ({
+  const mappedConversations: ConversationPreview[] = conversations.map((c: ApiConversationThread) => ({
     id: c.id,
     subject: c.subject,
     status: c.status,
     studentName: c.student?.full_name || 'Student',
-    studentEmail: '',
     assignee: c.assigned?.full_name || null,
-    lastMessage: 'New activity...', // Backend doesn't return last message in list
+    assigneeId: c.assigned?.id || null,
     lastMessageTime: new Date(c.last_message_at),
-    messages: [], // Fetched in ChatArea
   }));
 
-  const filtered = mappedConversations.filter((c) =>
-    statusFilter === 'all' ? true : c.status === statusFilter
-  );
+  const filtered = mappedConversations;
 
   const selected = mappedConversations.find((c) => c.id === selectedId) ?? null;
 
@@ -78,8 +74,13 @@ export function StudentInbox() {
     setMobileView('chat');
   };
 
-  const handleCreate = (subject: string, message: string) => {
-    createMutation.mutate({ subject, message });
+  const handleCreate = async (subject: string, message: string) => {
+    try {
+      await createMutation.mutateAsync({ subject, message });
+      return true;
+    } catch {
+      return false;
+    }
   };
 
   const tabs: { value: ConversationStatus | 'all'; label: string }[] = [
@@ -139,6 +140,14 @@ export function StudentInbox() {
           <ScrollArea className="flex-1">
             {isLoading ? (
               <ConversationSkeleton />
+            ) : isError ? (
+              <div className="flex flex-col items-center gap-2 py-12 px-4 text-center">
+                <AlertCircle className="w-8 h-8 text-rose-400" />
+                <p className="text-sm text-slate-500 dark:text-slate-400">Could not load conversations</p>
+                <p className="text-xs text-slate-400 dark:text-slate-500">
+                  {error instanceof Error ? error.message : 'Please try again.'}
+                </p>
+              </div>
             ) : filtered.length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-12 px-4 text-center">
                 <MessageSquare className="w-8 h-8 text-slate-300 dark:text-slate-600" />
@@ -184,8 +193,6 @@ export function StudentInbox() {
             conversation={selected}
             role="student"
             onBack={() => setMobileView('list')}
-            // onSendMessage is now handled internally inside ChatArea using TanStack Query
-            onSendMessage={() => {}} 
           />
         </div>
       </div>
@@ -194,6 +201,8 @@ export function StudentInbox() {
         open={newConvOpen}
         onOpenChange={setNewConvOpen}
         onCreate={handleCreate}
+        isCreating={createMutation.isPending}
+        error={createMutation.error instanceof Error ? createMutation.error.message : null}
       />
     </div>
   );
