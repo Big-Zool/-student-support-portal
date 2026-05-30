@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { Plus, MessageSquare, Sun, Moon } from 'lucide-react';
 import { useTheme } from 'next-themes';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
 import { Button } from './ui/button';
 import { ScrollArea } from './ui/scroll-area';
@@ -9,9 +10,9 @@ import { Skeleton } from './ui/skeleton';
 import { StatusBadge } from './StatusBadge';
 import { ChatArea } from './ChatArea';
 import { NewConversationDialog } from './NewConversationDialog';
-import type { Conversation, ConversationStatus } from './types';
-import { INITIAL_CONVERSATIONS, STUDENT_EMAIL } from './types';
+import type { ConversationStatus } from './types';
 import { cn } from './ui/utils';
+import { getConversations, createConversation } from '../../lib/apiClient';
 
 function ConversationSkeleton() {
   return (
@@ -22,7 +23,6 @@ function ConversationSkeleton() {
             <Skeleton className="h-4 w-36 rounded" />
             <Skeleton className="h-5 w-14 rounded-full" />
           </div>
-          <Skeleton className="h-3 w-full rounded" />
           <Skeleton className="h-3 w-3/4 rounded" />
           <Skeleton className="h-3 w-16 rounded" />
         </div>
@@ -32,79 +32,54 @@ function ConversationSkeleton() {
 }
 
 export function StudentInbox() {
-  const [conversations, setConversations] = useState<Conversation[]>(
-    INITIAL_CONVERSATIONS.filter((c) => c.studentEmail === STUDENT_EMAIL)
-  );
-  const [selectedId, setSelectedId] = useState<string | null>(conversations[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<ConversationStatus | 'all'>('all');
-  const [isLoading, setIsLoading] = useState(true);
   const [newConvOpen, setNewConvOpen] = useState(false);
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
   const { resolvedTheme, setTheme } = useTheme();
+  const queryClient = useQueryClient();
 
-  useEffect(() => {
-    const t = setTimeout(() => setIsLoading(false), 1500);
-    return () => clearTimeout(t);
-  }, []);
+  const { data: conversations = [], isLoading } = useQuery({
+    queryKey: ['conversations'],
+    queryFn: getConversations,
+  });
 
-  const filtered = conversations.filter((c) =>
+  const createMutation = useMutation({
+    mutationFn: ({ subject, message }: { subject: string; message: string }) =>
+      createConversation(subject, message),
+    onSuccess: (newThread) => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      setSelectedId(newThread.id);
+      setMobileView('chat');
+    },
+  });
+
+  // Since backend doesn't return the last message body in the list, we just map it.
+  const mappedConversations = conversations.map((c: any) => ({
+    id: c.id,
+    subject: c.subject,
+    status: c.status,
+    studentName: c.student?.full_name || 'Student',
+    studentEmail: '',
+    assignee: c.assigned?.full_name || null,
+    lastMessage: 'New activity...', // Backend doesn't return last message in list
+    lastMessageTime: new Date(c.last_message_at),
+    messages: [], // Fetched in ChatArea
+  }));
+
+  const filtered = mappedConversations.filter((c) =>
     statusFilter === 'all' ? true : c.status === statusFilter
   );
 
-  const selected = conversations.find((c) => c.id === selectedId) ?? null;
+  const selected = mappedConversations.find((c) => c.id === selectedId) ?? null;
 
   const handleSelectConv = (id: string) => {
     setSelectedId(id);
     setMobileView('chat');
   };
 
-  const handleSendMessage = (convId: string, content: string) => {
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === convId
-          ? {
-              ...c,
-              lastMessage: content,
-              lastMessageTime: new Date(),
-              messages: [
-                ...c.messages,
-                {
-                  id: `m-${Date.now()}`,
-                  content,
-                  sender: 'student',
-                  senderName: 'Emma Chen',
-                  timestamp: new Date(),
-                },
-              ],
-            }
-          : c
-      )
-    );
-  };
-
   const handleCreate = (subject: string, message: string) => {
-    const newConv: Conversation = {
-      id: `conv-${Date.now()}`,
-      subject,
-      status: 'open',
-      studentName: 'Emma Chen',
-      studentEmail: STUDENT_EMAIL,
-      assignee: null,
-      lastMessage: message,
-      lastMessageTime: new Date(),
-      messages: [
-        {
-          id: `m-${Date.now()}`,
-          content: message,
-          sender: 'student',
-          senderName: 'Emma Chen',
-          timestamp: new Date(),
-        },
-      ],
-    };
-    setConversations((prev) => [newConv, ...prev]);
-    setSelectedId(newConv.id);
-    setMobileView('chat');
+    createMutation.mutate({ subject, message });
   };
 
   const tabs: { value: ConversationStatus | 'all'; label: string }[] = [
@@ -131,7 +106,7 @@ export function StudentInbox() {
             {resolvedTheme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
         </div>
-        <Button size="sm" className="h-8 text-xs gap-1.5" onClick={() => setNewConvOpen(true)}>
+        <Button size="sm" className="h-8 text-xs gap-1.5" onClick={() => setNewConvOpen(true)} disabled={createMutation.isPending}>
           <Plus className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">New Conversation</span>
           <span className="sm:hidden">New</span>
@@ -188,9 +163,6 @@ export function StudentInbox() {
                       </p>
                       <StatusBadge status={conv.status} />
                     </div>
-                    <p className="text-xs text-slate-400 dark:text-slate-500 line-clamp-2 leading-relaxed mb-1.5">
-                      {conv.lastMessage}
-                    </p>
                     <p className="text-[10px] text-slate-300 dark:text-slate-600">
                       {formatDistanceToNow(conv.lastMessageTime, { addSuffix: true })}
                     </p>
@@ -211,9 +183,9 @@ export function StudentInbox() {
           <ChatArea
             conversation={selected}
             role="student"
-            isLoading={isLoading}
-            onSendMessage={handleSendMessage}
             onBack={() => setMobileView('list')}
+            // onSendMessage is now handled internally inside ChatArea using TanStack Query
+            onSendMessage={() => {}} 
           />
         </div>
       </div>

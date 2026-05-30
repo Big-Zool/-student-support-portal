@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import { Send, ArrowLeft, UserCheck, RefreshCw } from 'lucide-react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
@@ -9,18 +10,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Skeleton } from './ui/skeleton';
 import { StatusBadge } from './StatusBadge';
 import { ReassignDialog } from './ReassignDialog';
-import type { Conversation, ConversationStatus, Role } from './types';
+import type { ConversationStatus, Role } from './types';
 import { cn } from './ui/utils';
+import { getConversation, sendMessage } from '../../lib/apiClient';
 
 interface ChatAreaProps {
-  conversation: Conversation | null;
+  conversation: any | null; // We pass the basic thread info from the list
   role: Role;
-  isLoading?: boolean;
-  onSendMessage: (convId: string, content: string) => void;
   onAssignToMe?: (convId: string) => void;
   onStatusChange?: (convId: string, status: ConversationStatus) => void;
   onReassign?: (convId: string, agent: string) => void;
   onBack?: () => void;
+  onSendMessage?: any; // Kept for prop compatibility but unused
 }
 
 function getInitials(name: string) {
@@ -62,10 +63,8 @@ function SkeletonChat() {
 }
 
 export function ChatArea({
-  conversation,
+  conversation: previewConv,
   role,
-  isLoading,
-  onSendMessage,
   onAssignToMe,
   onStatusChange,
   onReassign,
@@ -74,6 +73,28 @@ export function ChatArea({
   const [message, setMessage] = useState('');
   const [reassignOpen, setReassignOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const queryClient = useQueryClient();
+
+  const { data: fullConv, isLoading } = useQuery({
+    queryKey: ['conversation', previewConv?.id],
+    queryFn: () => getConversation(previewConv!.id),
+    enabled: !!previewConv?.id,
+  });
+
+  const sendMutation = useMutation({
+    mutationFn: (body: string) => sendMessage(previewConv!.id, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['conversation', previewConv!.id] });
+      queryClient.invalidateQueries({ queryKey: ['conversations'] }); // Refresh list to show new lastMessage time
+    },
+  });
+
+  const conversation = fullConv ? {
+    ...fullConv.thread,
+    studentName: fullConv.thread.student?.full_name || 'Student',
+    assignee: fullConv.thread.assigned?.full_name || null,
+    messages: fullConv.messages,
+  } : null;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -81,7 +102,7 @@ export function ChatArea({
 
   const handleSend = () => {
     if (!conversation || !message.trim()) return;
-    onSendMessage(conversation.id, message.trim());
+    sendMutation.mutate(message.trim());
     setMessage('');
   };
 
@@ -89,9 +110,7 @@ export function ChatArea({
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleSend();
   };
 
-  if (isLoading) return <SkeletonChat />;
-
-  if (!conversation) {
+  if (!previewConv) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center gap-3 text-center px-8 bg-slate-50/50 dark:bg-slate-950/50 transition-colors duration-200">
         <div className="w-14 h-14 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
@@ -106,6 +125,8 @@ export function ChatArea({
       </div>
     );
   }
+
+  if (isLoading || !conversation) return <SkeletonChat />;
 
   const isUnassigned = !conversation.assignee;
   const showSalesActions = role === 'sales' || role === 'manager';
@@ -133,7 +154,7 @@ export function ChatArea({
             </div>
             <p className="text-xs text-slate-400 dark:text-slate-500 mt-0.5 truncate">
               {showSalesActions
-                ? `${conversation.studentName} · ${conversation.studentEmail}`
+                ? `${conversation.studentName}`
                 : conversation.assignee
                 ? `Support: ${conversation.assignee}`
                 : 'Looking for an agent…'}
@@ -190,25 +211,26 @@ export function ChatArea({
       {/* Messages */}
       <ScrollArea className="flex-1 min-h-0">
         <div className="px-4 py-4 flex flex-col gap-4">
-          {conversation.messages.map((msg) => {
-            const isStudent = msg.sender === 'student';
+          {conversation.messages?.map((msg: any) => {
+            const isStudent = msg.sender_type === 'student';
+            const senderName = msg.sender?.full_name || 'Unknown';
             return (
               <div key={msg.id} className={cn('flex gap-2.5', isStudent ? 'flex-row-reverse' : 'flex-row')}>
                 <Avatar className="w-7 h-7 flex-shrink-0 mt-0.5">
-                  <AvatarFallback className={cn('text-[10px] font-semibold', avatarColor(msg.senderName))}>
-                    {getInitials(msg.senderName)}
+                  <AvatarFallback className={cn('text-[10px] font-semibold', avatarColor(senderName))}>
+                    {getInitials(senderName)}
                   </AvatarFallback>
                 </Avatar>
                 <div className={cn('flex flex-col gap-1 max-w-[75%]', isStudent ? 'items-end' : 'items-start')}>
                   <div className="flex items-center gap-1.5">
                     {!isStudent && (
-                      <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">{msg.senderName}</span>
+                      <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">{senderName}</span>
                     )}
                     <span className="text-[10px] text-slate-400 dark:text-slate-500">
-                      {format(msg.timestamp, 'h:mm a')}
+                      {format(new Date(msg.created_at), 'h:mm a')}
                     </span>
                     {isStudent && (
-                      <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">{msg.senderName}</span>
+                      <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">{senderName}</span>
                     )}
                   </div>
                   <div
@@ -219,7 +241,7 @@ export function ChatArea({
                         : 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-100 rounded-tl-sm'
                     )}
                   >
-                    {msg.content}
+                    {msg.body}
                   </div>
                 </div>
               </div>
@@ -241,14 +263,14 @@ export function ChatArea({
                 ? 'This conversation is closed.'
                 : 'Type a message… (⌘↵ to send)'
             }
-            disabled={conversation.status === 'closed'}
+            disabled={conversation.status === 'closed' || sendMutation.isPending}
             rows={2}
             className="flex-1 resize-none text-sm min-h-[60px] max-h-32"
           />
           <Button
             size="sm"
             onClick={handleSend}
-            disabled={!message.trim() || conversation.status === 'closed'}
+            disabled={!message.trim() || conversation.status === 'closed' || sendMutation.isPending}
             className="h-9 px-3 flex-shrink-0"
           >
             <Send className="w-3.5 h-3.5" />
@@ -263,6 +285,7 @@ export function ChatArea({
         onOpenChange={setReassignOpen}
         currentAssignee={conversation.assignee}
         onConfirm={(agent) => {
+          // agent is the ID of the agent we want to reassign to
           onReassign?.(conversation.id, agent);
           setReassignOpen(false);
         }}

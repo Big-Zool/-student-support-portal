@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { Search, Inbox, Sun, Moon } from 'lucide-react';
 import { useTheme } from 'next-themes';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
@@ -11,9 +12,10 @@ import { Avatar, AvatarFallback } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { StatusBadge } from './StatusBadge';
 import { ChatArea } from './ChatArea';
-import type { Conversation, ConversationStatus, Role } from './types';
-import { INITIAL_CONVERSATIONS, CURRENT_SALES_USER } from './types';
+import type { ConversationStatus, Role } from './types';
 import { cn } from './ui/utils';
+import { getConversations, updateConversationStatus, assignConversation } from '../../lib/apiClient';
+import { useAuth } from '../auth/AuthContext';
 
 type QueueTab = 'unassigned' | 'mine' | 'all';
 
@@ -66,25 +68,50 @@ interface SalesManagerInboxProps {
 }
 
 export function SalesManagerInbox({ role }: SalesManagerInboxProps) {
-  const [conversations, setConversations] = useState<Conversation[]>(INITIAL_CONVERSATIONS);
-  const [selectedId, setSelectedId] = useState<string | null>(INITIAL_CONVERSATIONS[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [queueTab, setQueueTab] = useState<QueueTab>(role === 'manager' ? 'all' : 'unassigned');
   const [statusFilter, setStatusFilter] = useState<ConversationStatus | 'all'>('all');
   const [search, setSearch] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
   const { resolvedTheme, setTheme } = useTheme();
+  
+  const queryClient = useQueryClient();
+  const { profile } = useAuth();
+  const currentUserName = profile?.full_name || '';
 
-  useEffect(() => {
-    setIsLoading(true);
-    setQueueTab(role === 'manager' ? 'all' : 'unassigned');
-    const t = setTimeout(() => setIsLoading(false), 1500);
-    return () => clearTimeout(t);
-  }, [role]);
+  const { data: apiConversations = [], isLoading } = useQuery({
+    queryKey: ['conversations'],
+    queryFn: getConversations,
+  });
 
-  const filtered = conversations.filter((c) => {
+  const assignMutation = useMutation({
+    mutationFn: ({ threadId, assignedTo }: { threadId: string; assignedTo: string | null }) =>
+      assignConversation(threadId, assignedTo),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['conversations'] }),
+  });
+
+  const statusMutation = useMutation({
+    mutationFn: ({ threadId, status }: { threadId: string; status: ConversationStatus }) =>
+      updateConversationStatus(threadId, status),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['conversations'] }),
+  });
+
+  const mappedConversations = apiConversations.map((c: any) => ({
+    id: c.id,
+    subject: c.subject,
+    status: c.status,
+    studentName: c.student?.full_name || 'Student',
+    studentEmail: '', // Not returned in list by default
+    assignee: c.assigned?.full_name || null,
+    assigneeId: c.assigned?.id || null,
+    lastMessage: 'New activity...',
+    lastMessageTime: new Date(c.last_message_at),
+    messages: [], // Handled by ChatArea
+  }));
+
+  const filtered = mappedConversations.filter((c) => {
     if (queueTab === 'unassigned' && c.assignee !== null) return false;
-    if (queueTab === 'mine' && c.assignee !== CURRENT_SALES_USER) return false;
+    if (queueTab === 'mine' && c.assignee !== currentUserName) return false;
     if (statusFilter !== 'all' && c.status !== statusFilter) return false;
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -93,43 +120,23 @@ export function SalesManagerInbox({ role }: SalesManagerInboxProps) {
     return true;
   });
 
-  const selected = conversations.find((c) => c.id === selectedId) ?? null;
+  const selected = mappedConversations.find((c) => c.id === selectedId) ?? null;
 
   const handleSelectConv = (id: string) => {
     setSelectedId(id);
     setMobileView('chat');
   };
 
-  const handleSendMessage = (convId: string, content: string) => {
-    setConversations((prev) =>
-      prev.map((c) =>
-        c.id === convId
-          ? {
-              ...c,
-              lastMessage: content,
-              lastMessageTime: new Date(),
-              messages: [
-                ...c.messages,
-                { id: `m-${Date.now()}`, content, sender: 'team', senderName: CURRENT_SALES_USER, timestamp: new Date() },
-              ],
-            }
-          : c
-      )
-    );
-  };
-
   const handleAssignToMe = (convId: string) => {
-    setConversations((prev) =>
-      prev.map((c) => (c.id === convId ? { ...c, assignee: CURRENT_SALES_USER } : c))
-    );
+    assignMutation.mutate({ threadId: convId, assignedTo: profile?.id || null });
   };
 
   const handleStatusChange = (convId: string, status: ConversationStatus) => {
-    setConversations((prev) => prev.map((c) => (c.id === convId ? { ...c, status } : c)));
+    statusMutation.mutate({ threadId: convId, status });
   };
 
-  const handleReassign = (convId: string, agent: string) => {
-    setConversations((prev) => prev.map((c) => (c.id === convId ? { ...c, assignee: agent } : c)));
+  const handleReassign = (convId: string, agentId: string) => {
+    assignMutation.mutate({ threadId: convId, assignedTo: agentId });
   };
 
   const roleLabel = role === 'manager' ? 'Manager Queue' : 'Sales Inbox';
@@ -255,7 +262,7 @@ export function SalesManagerInbox({ role }: SalesManagerInboxProps) {
                             {conv.assignee ? (
                               <span className="flex items-center gap-1">
                                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
-                                {conv.assignee === CURRENT_SALES_USER ? 'You' : conv.assignee}
+                                {conv.assignee === currentUserName ? 'You' : conv.assignee}
                               </span>
                             ) : (
                               <span className="text-amber-500 dark:text-amber-400 font-medium">Unassigned</span>
@@ -284,12 +291,11 @@ export function SalesManagerInbox({ role }: SalesManagerInboxProps) {
           <ChatArea
             conversation={selected}
             role={role}
-            isLoading={isLoading}
-            onSendMessage={handleSendMessage}
             onAssignToMe={handleAssignToMe}
             onStatusChange={handleStatusChange}
             onReassign={handleReassign}
             onBack={() => setMobileView('list')}
+            onSendMessage={() => {}} // Handled internally
           />
         </div>
       </div>

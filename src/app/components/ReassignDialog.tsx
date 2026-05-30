@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import {
   Dialog,
   DialogContent,
@@ -9,22 +10,30 @@ import {
 import { Button } from './ui/button';
 import { Label } from './ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { SALES_AGENTS, CURRENT_SALES_USER, MANAGER_USER } from './types';
+import { getUsers } from '../../lib/apiClient';
 
 interface ReassignDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   currentAssignee: string | null;
-  onConfirm: (agent: string) => void;
+  onConfirm: (agentId: string) => void;
 }
 
 export function ReassignDialog({ open, onOpenChange, currentAssignee, onConfirm }: ReassignDialogProps) {
-  const [selected, setSelected] = useState('');
+  const [selectedId, setSelectedId] = useState('');
+
+  const { data: users = [] } = useQuery({
+    queryKey: ['users'],
+    queryFn: getUsers,
+    enabled: open,
+  });
+
+  const teamMembers = users.filter((u) => u.role === 'sales' || u.role === 'manager');
 
   const handleConfirm = () => {
-    if (selected) {
-      onConfirm(selected);
-      setSelected('');
+    if (selectedId) {
+      onConfirm(selectedId);
+      setSelectedId('');
     }
   };
 
@@ -43,20 +52,16 @@ export function ReassignDialog({ open, onOpenChange, currentAssignee, onConfirm 
           </div>
           <div className="flex flex-col gap-1.5">
             <Label>Assign to</Label>
-            <Select value={selected} onValueChange={setSelected}>
+            <Select value={selectedId} onValueChange={setSelectedId}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Select a sales agent…" />
+                <SelectValue placeholder="Select a team member…" />
               </SelectTrigger>
               <SelectContent>
-                {[MANAGER_USER, CURRENT_SALES_USER, ...SALES_AGENTS.filter((a) => a !== CURRENT_SALES_USER)]
-                  .filter((a) => a !== currentAssignee)
-                  .map((agent) => (
-                    <SelectItem key={agent} value={agent}>
-                      {agent === MANAGER_USER
-                        ? `${agent} (admin)`
-                        : agent === CURRENT_SALES_USER
-                        ? `${agent} (you)`
-                        : agent}
+                {teamMembers
+                  .filter((member) => member.full_name !== currentAssignee) // Exclude current
+                  .map((member) => (
+                    <SelectItem key={member.id} value={member.id}>
+                      {member.full_name} ({member.role})
                     </SelectItem>
                   ))}
               </SelectContent>
@@ -67,7 +72,7 @@ export function ReassignDialog({ open, onOpenChange, currentAssignee, onConfirm 
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
-          <Button onClick={handleConfirm} disabled={!selected}>
+          <Button onClick={handleConfirm} disabled={!selectedId}>
             {currentAssignee ? 'Confirm Reassign' : 'Assign'}
           </Button>
         </DialogFooter>
