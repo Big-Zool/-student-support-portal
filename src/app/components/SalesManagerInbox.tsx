@@ -6,7 +6,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
 import { Input } from './ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { ScrollArea } from './ui/scroll-area';
 import { Skeleton } from './ui/skeleton';
 import { Avatar, AvatarFallback } from './ui/avatar';
 import { Badge } from './ui/badge';
@@ -77,7 +76,7 @@ interface SalesManagerInboxProps {
 export function SalesManagerInbox({ role }: SalesManagerInboxProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedPreview, setSelectedPreview] = useState<ConversationPreview | null>(null);
-  const [queueTab, setQueueTab] = useState<QueueTab>(role === 'manager' ? 'all' : 'unassigned');
+  const [queueTab, setQueueTab] = useState<QueueTab>(role === 'manager' ? 'all' : 'mine');
   const [statusFilter, setStatusFilter] = useState<ConversationStatus | 'all'>('all');
   const [search, setSearch] = useState('');
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
@@ -211,7 +210,7 @@ export function SalesManagerInbox({ role }: SalesManagerInboxProps) {
         {/* Sidebar */}
         <div
           className={cn(
-            'flex flex-col border-r border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex-shrink-0 transition-colors duration-200',
+            'flex flex-col min-h-0 border-r border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 flex-shrink-0 transition-colors duration-200',
             'w-full md:w-72 lg:w-80',
             mobileView === 'chat' ? 'hidden md:flex' : 'flex'
           )}
@@ -253,8 +252,8 @@ export function SalesManagerInbox({ role }: SalesManagerInboxProps) {
             </Tabs>
           </div>
 
-          {/* Conversation list */}
-          <ScrollArea className="flex-1">
+          {/* Conversation list — native scroll avoids Radix ScrollArea 0-height in flex layouts */}
+          <div className="flex-1 min-h-0 overflow-y-auto">
             {isLoading ? (
               <SidebarSkeleton />
             ) : isError ? (
@@ -269,7 +268,11 @@ export function SalesManagerInbox({ role }: SalesManagerInboxProps) {
               <div className="flex flex-col items-center gap-2 py-12 px-4 text-center">
                 <Inbox className="w-8 h-8 text-slate-300 dark:text-slate-600" />
                 <p className="text-sm text-slate-400 dark:text-slate-500">No conversations match</p>
-                <p className="text-xs text-slate-300 dark:text-slate-600">Try adjusting your filters</p>
+                <p className="text-xs text-slate-300 dark:text-slate-600">
+                  {role === 'sales' && queueTab === 'unassigned'
+                    ? 'Nothing waiting for assignment. Try the Mine tab for chats assigned to you.'
+                    : 'Try adjusting your filters'}
+                </p>
               </div>
             ) : (
               <div className="flex flex-col gap-1 p-2">
@@ -319,7 +322,7 @@ export function SalesManagerInbox({ role }: SalesManagerInboxProps) {
                 ))}
               </div>
             )}
-          </ScrollArea>
+          </div>
         </div>
 
         {/* Chat area */}

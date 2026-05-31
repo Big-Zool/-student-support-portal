@@ -7,7 +7,10 @@ import {
 } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { supabase } from '../../lib/supabaseClient';
+import { getMe } from '../../lib/apiClient';
 import type { Role } from '../components/types';
+
+const PROFILE_FETCH_TIMEOUT_MS = 10_000;
 
 // ---------- Types ----------
 
@@ -38,45 +41,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   async function fetchProfile(userId: string): Promise<Profile | null> {
-    const { data } = await supabase
+    const timeout = new Promise<null>((resolve) => {
+      setTimeout(() => resolve(null), PROFILE_FETCH_TIMEOUT_MS);
+    });
+
+    const fromSupabase = supabase
       .from('profiles')
       .select('id, full_name, role')
       .eq('id', userId)
-      .single();
+      .single()
+      .then(({ data, error }) => {
+        if (error || !data) return null;
+        return data as Profile;
+      });
 
-    return data as Profile | null;
+    const fromApi = getMe().catch(() => null);
+
+    const profile = await Promise.race([fromSupabase, fromApi, timeout]);
+    return profile;
+  }
+
+  async function applySession(session: { user: User } | null) {
+    setUser(session?.user ?? null);
+    if (session?.user) {
+      const p = await fetchProfile(session.user.id);
+      setProfile(p);
+    } else {
+      setProfile(null);
+    }
+    setLoading(false);
   }
 
   useEffect(() => {
-    // Safety timeout — if Supabase hangs for 5 seconds, stop the loading spinner
-    // so the user sees the login page instead of a white screen forever
-    const timeout = setTimeout(() => setLoading(false), 5000);
+    const bootTimeout = setTimeout(() => setLoading(false), 5000);
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      clearTimeout(timeout);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        const p = await fetchProfile(session.user.id);
-        setProfile(p);
-      }
-      setLoading(false);
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      clearTimeout(bootTimeout);
+      void applySession(session);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setUser(session?.user ?? null);
-        if (session?.user) {
-          const p = await fetchProfile(session.user.id);
-          setProfile(p);
-        } else {
-          setProfile(null);
-        }
-        setLoading(false);
-      }
-    );
+    // Defer async work — awaiting Supabase calls inside this callback can deadlock signInWithPassword.
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setTimeout(() => {
+        void applySession(session);
+      }, 0);
+    });
 
     return () => {
-      clearTimeout(timeout);
+      clearTimeout(bootTimeout);
       subscription.unsubscribe();
     };
   }, []);
@@ -84,8 +96,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ---------- Auth actions ----------
 
   async function signIn(email: string, password: string): Promise<string | null> {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return error.message;
+
+    if (data.session?.user) {
+      setUser(data.session.user);
+      const p = await fetchProfile(data.session.user.id);
+      if (!p) {
+        return 'Signed in, but your profile could not be loaded. Check that the API worker is running (cd worker && npm run dev).';
+      }
+      setProfile(p);
+      setLoading(false);
+    }
+
     return null;
   }
 

@@ -19,9 +19,14 @@ app.use('/api/*', cors({
       'http://localhost:5173',
       'http://localhost:5174',
       'http://localhost:3000',
+      'https://student-support-chat-5sm.pages.dev',
     ];
-    // Allow any Cloudflare Pages deployment of this project
-    if (!origin || allowed.includes(origin) || origin.endsWith('.student-support-chat-5sm.pages.dev')) {
+    // Allow production + preview deployments (*.student-support-chat-5sm.pages.dev)
+    if (
+      !origin ||
+      allowed.includes(origin) ||
+      origin.endsWith('.student-support-chat-5sm.pages.dev')
+    ) {
       return origin;
     }
     return null;

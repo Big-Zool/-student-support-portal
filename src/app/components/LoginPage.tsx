@@ -40,9 +40,12 @@ export function LoginPage() {
     }
 
     setIsLoading(true);
-    const error = await signIn(loginEmail.trim(), loginPassword);
-    if (error) setErrorMsg(error);
-    setIsLoading(false);
+    try {
+      const error = await signIn(loginEmail.trim(), loginPassword);
+      if (error) setErrorMsg(error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSignup = async (e: React.FormEvent) => {
@@ -60,14 +63,17 @@ export function LoginPage() {
     }
 
     setIsLoading(true);
-    const error = await signUp(signupEmail.trim(), signupPassword, signupName.trim());
-    if (error) {
-      setErrorMsg(error);
-    } else {
-      setErrorMsg(null);
-      setTab('login');
+    try {
+      const error = await signUp(signupEmail.trim(), signupPassword, signupName.trim());
+      if (error) {
+        setErrorMsg(error);
+      } else {
+        setErrorMsg(null);
+        setTab('login');
+      }
+    } finally {
+      setIsLoading(false);
     }
-    setIsLoading(false);
   };
 
   return (

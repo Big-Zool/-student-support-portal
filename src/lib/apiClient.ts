@@ -45,6 +45,7 @@ export type ConversationFilters = {
 
 // Read the backend URL from .env (e.g. http://localhost:8787/api)
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8787/api';
+const API_TIMEOUT_MS = 15_000;
 
 function buildQueryString(filters?: ConversationFilters) {
   if (!filters) return '';
@@ -63,28 +64,52 @@ function buildQueryString(filters?: ConversationFilters) {
  * It automatically grabs the current Supabase session token and attaches it to the request.
  * If the response is not ok, it throws an error.
  */
+function apiUnreachableMessage(): string {
+  return `Cannot reach the API at ${API_BASE_URL}. For local dev, run: cd worker && npm run dev`;
+}
+
 async function apiFetch<T>(endpoint: string, options?: RequestInit): Promise<T> {
   const { data: { session } } = await supabase.auth.getSession();
-  
+
   if (!session?.access_token) {
     throw new Error('You must be logged in to make this request');
   }
 
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${session.access_token}`,
-      ...options?.headers,
-    },
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), API_TIMEOUT_MS);
 
-  if (!response.ok) {
-    const errData = await response.json().catch(() => null);
-    throw new Error(errData?.error || `API Error: ${response.status} ${response.statusText}`);
+  try {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      ...options,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+        ...options?.headers,
+      },
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => null);
+      const detail = errData?.error || `API Error: ${response.status} ${response.statusText}`;
+      if (response.status >= 500) {
+        throw new Error(`${detail}. Check that the Worker is running and configured.`);
+      }
+      throw new Error(detail);
+    }
+
+    return response.json();
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error(`Request timed out after ${API_TIMEOUT_MS / 1000}s. ${apiUnreachableMessage()}`);
+    }
+    if (error instanceof TypeError) {
+      throw new Error(apiUnreachableMessage());
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  return response.json();
 }
 
 // ==========================================

@@ -46,7 +46,7 @@ conversations.get('/', async (c) => {
     query = query.is('assigned_to', null);
   } else if (assignedTo === 'me') {
     query = query.eq('assigned_to', profile.id);
-  } else if (assignedTo) {
+  } else if (assignedTo && assignedTo !== 'all') {
     query = query.eq('assigned_to', assignedTo);
   }
 

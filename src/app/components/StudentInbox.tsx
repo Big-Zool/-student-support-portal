@@ -5,7 +5,6 @@ import { useTheme } from 'next-themes';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Tabs, TabsList, TabsTrigger } from './ui/tabs';
 import { Button } from './ui/button';
-import { ScrollArea } from './ui/scroll-area';
 import { Skeleton } from './ui/skeleton';
 import { StatusBadge } from './StatusBadge';
 import { ChatArea } from './ChatArea';
@@ -153,7 +152,7 @@ export function StudentInbox() {
         {/* Sidebar */}
         <div
           className={cn(
-            'flex flex-col border-r border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 transition-colors duration-200',
+            'flex flex-col min-h-0 border-r border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900 transition-colors duration-200',
             'w-full md:w-72 lg:w-80 flex-shrink-0',
             mobileView === 'chat' ? 'hidden md:flex' : 'flex'
           )}
@@ -171,8 +170,8 @@ export function StudentInbox() {
             </Tabs>
           </div>
 
-          {/* Conversation list */}
-          <ScrollArea className="flex-1">
+          {/* Conversation list — native scroll avoids Radix ScrollArea 0-height in flex layouts */}
+          <div className="flex-1 min-h-0 overflow-y-auto">
             {isLoading ? (
               <ConversationSkeleton />
             ) : isError ? (
@@ -214,7 +213,7 @@ export function StudentInbox() {
                 ))}
               </div>
             )}
-          </ScrollArea>
+          </div>
         </div>
 
         {/* Chat area */}
