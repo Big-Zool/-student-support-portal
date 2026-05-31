@@ -37,35 +37,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  async function fetchProfile(userId: string, retries = 3): Promise<Profile | null> {
-  console.log('FETCHING PROFILE FOR:', userId);
-  
-  // Test the session token
-  const { data: { session } } = await supabase.auth.getSession();
-  console.log('HAS TOKEN:', !!session?.access_token);
-  
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('id, full_name, role')
-    .eq('id', userId)
-    .single();
+  async function fetchProfile(userId: string): Promise<Profile | null> {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, full_name, role')
+      .eq('id', userId)
+      .single();
 
-  console.log('PROFILE RESULT:', { data, error });
-  return data as Profile | null;
-}
-  supabase.auth.getSession().then(async ({ data: { session } }) => {
-  console.log('SESSION BEFORE FETCH:', session?.access_token ? 'HAS TOKEN' : 'NO TOKEN');
-  const { data, error } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', session?.user?.id ?? '')
-    .single();
-  console.log('DIRECT QUERY:', { data, error });
-});
+    return data as Profile | null;
+  }
 
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session }, error }) => {
-      console.log('SESSION:', session, 'ERROR:', error);
+    // Safety timeout — if Supabase hangs for 5 seconds, stop the loading spinner
+    // so the user sees the login page instead of a white screen forever
+    const timeout = setTimeout(() => setLoading(false), 5000);
+
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      clearTimeout(timeout);
       setUser(session?.user ?? null);
       if (session?.user) {
         const p = await fetchProfile(session.user.id);
@@ -87,7 +75,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      clearTimeout(timeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   // ---------- Auth actions ----------

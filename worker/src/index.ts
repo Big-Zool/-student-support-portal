@@ -14,7 +14,18 @@ const app = new Hono<{ Bindings: Env }>();
 
 // Allow frontend to communicate with this API
 app.use('/api/*', cors({
-  origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000'],
+  origin: (origin) => {
+    const allowed = [
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'http://localhost:3000',
+    ];
+    // Allow any Cloudflare Pages deployment of this project
+    if (!origin || allowed.includes(origin) || origin.endsWith('.student-support-chat-5sm.pages.dev')) {
+      return origin;
+    }
+    return null;
+  },
   allowMethods: ['GET', 'POST', 'PATCH', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization'],
   exposeHeaders: ['Content-Length'],
