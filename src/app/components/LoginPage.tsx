@@ -5,7 +5,7 @@ import { Input } from './ui/input';
 import { Button } from './ui/button';
 import { Label } from './ui/label';
 import { useTheme } from 'next-themes';
-import { GraduationCap, Loader2, AlertCircle, Moon, Sun } from 'lucide-react';
+import { GraduationCap, Loader2, AlertCircle, Moon, Sun, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 
 export function LoginPage() {
@@ -16,6 +16,10 @@ export function LoginPage() {
   const [tab, setTab] = useState('login');
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Show/hide password states
+  const [showLoginPassword, setShowLoginPassword] = useState(false);
+  const [showSignupPassword, setShowSignupPassword] = useState(false);
 
   // Login form state — using useState instead of useRef so values are always in sync
   const [loginEmail, setLoginEmail] = useState('');
@@ -152,15 +156,30 @@ export function LoginPage() {
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="login-password" className="dark:text-slate-300">Password</Label>
-                  <Input
-                    id="login-password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    required
-                    autoComplete="current-password"
-                  />
+                  <div className="relative">
+                    <Input
+                      id="login-password"
+                      type={showLoginPassword ? "text" : "password"}
+                      placeholder="••••••••"
+                      value={loginPassword}
+                      onChange={(e) => setLoginPassword(e.target.value)}
+                      required
+                      autoComplete="current-password"
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowLoginPassword(!showLoginPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors"
+                      aria-label={showLoginPassword ? "Hide password" : "Show password"}
+                    >
+                      {showLoginPassword ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
                 </div>
                 <Button type="submit" disabled={isLoading} className="w-full mt-1">
                   {isLoading ? (
@@ -171,7 +190,7 @@ export function LoginPage() {
                   ) : 'Sign in'}
                 </Button>
                 <p className="text-xs text-slate-400 dark:text-slate-500 text-center">
-                  Demo: student@demo.com · sales1@demo.com · manager@demo.com
+                  Demo: student@demo.com · sales1@demo.com · sales2@demo.com · manager@demo.com
                   <br />Password: <span className="font-mono">demo1234</span>
                 </p>
               </form>
@@ -204,15 +223,30 @@ export function LoginPage() {
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label htmlFor="signup-password" className="dark:text-slate-300">Password</Label>
-                  <Input
-                    id="signup-password"
-                    type="password"
-                    placeholder="Min. 8 characters"
-                    value={signupPassword}
-                    onChange={(e) => setSignupPassword(e.target.value)}
-                    required
-                    autoComplete="new-password"
-                  />
+                  <div className="relative">
+                    <Input
+                      id="signup-password"
+                      type={showSignupPassword ? "text" : "password"}
+                      placeholder="Min. 8 characters"
+                      value={signupPassword}
+                      onChange={(e) => setSignupPassword(e.target.value)}
+                      required
+                      autoComplete="new-password"
+                      className="pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowSignupPassword(!showSignupPassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors"
+                      aria-label={showSignupPassword ? "Hide password" : "Show password"}
+                    >
+                      {showSignupPassword ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
+                    </button>
+                  </div>
                 </div>
                 <Button type="submit" disabled={isLoading} className="w-full mt-1">
                   {isLoading ? (
