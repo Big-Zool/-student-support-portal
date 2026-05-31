@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { AlertCircle, Search, Inbox, Sun, Moon } from 'lucide-react';
 import { useTheme } from 'next-themes';
@@ -21,6 +21,7 @@ import {
   type ApiConversationThread,
   type ConversationFilters,
 } from '../../lib/apiClient';
+import { subscribeToConversationList } from '../../lib/realtime';
 import { useAuth } from '../auth/AuthContext';
 
 type QueueTab = 'unassigned' | 'mine' | 'all';
@@ -75,6 +76,7 @@ interface SalesManagerInboxProps {
 
 export function SalesManagerInbox({ role }: SalesManagerInboxProps) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedPreview, setSelectedPreview] = useState<ConversationPreview | null>(null);
   const [queueTab, setQueueTab] = useState<QueueTab>(role === 'manager' ? 'all' : 'unassigned');
   const [statusFilter, setStatusFilter] = useState<ConversationStatus | 'all'>('all');
   const [search, setSearch] = useState('');
@@ -92,6 +94,12 @@ export function SalesManagerInbox({ role }: SalesManagerInboxProps) {
     queryKey: ['conversations', { status: statusFilter, assignedTo: assignedToFilter }],
     queryFn: () => getConversations({ status: statusFilter, assignedTo: assignedToFilter }),
   });
+
+  useEffect(() => {
+    return subscribeToConversationList(() => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    });
+  }, [queryClient]);
 
   const assignMutation = useMutation({
     mutationFn: ({ threadId, assignedTo }: { threadId: string; assignedTo: string | null }) =>
@@ -129,10 +137,26 @@ export function SalesManagerInbox({ role }: SalesManagerInboxProps) {
     return true;
   });
 
-  const selected = mappedConversations.find((c) => c.id === selectedId) ?? null;
+  const selected =
+    mappedConversations.find((c) => c.id === selectedId) ?? selectedPreview;
 
-  const handleSelectConv = (id: string) => {
-    setSelectedId(id);
+  useEffect(() => {
+    if (isLoading || mappedConversations.length === 0) return;
+
+    if (selectedId) {
+      const match = mappedConversations.find((c) => c.id === selectedId);
+      if (match) setSelectedPreview(match);
+      return;
+    }
+
+    const first = mappedConversations[0];
+    setSelectedId(first.id);
+    setSelectedPreview(first);
+  }, [mappedConversations, isLoading, selectedId]);
+
+  const handleSelectConv = (conv: ConversationPreview) => {
+    setSelectedId(conv.id);
+    setSelectedPreview(conv);
     setMobileView('chat');
   };
 
@@ -252,7 +276,7 @@ export function SalesManagerInbox({ role }: SalesManagerInboxProps) {
                 {filtered.map((conv) => (
                   <button
                     key={conv.id}
-                    onClick={() => handleSelectConv(conv.id)}
+                    onClick={() => handleSelectConv(conv)}
                     className={cn(
                       'w-full text-left p-3 rounded-lg border transition-all duration-100',
                       selectedId === conv.id

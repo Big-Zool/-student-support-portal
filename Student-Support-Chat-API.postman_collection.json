@@ -1,0 +1,365 @@
+{
+  "info": {
+    "name": "Student Support Chat API",
+    "description": "Complete API collection for testing the Student Support Chat Dashboard backend",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8787/api",
+      "type": "string"
+    },
+    {
+      "key": "token",
+      "value": "YOUR_TOKEN_HERE",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "User Endpoints",
+      "item": [
+        {
+          "name": "Get Current User Profile",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/me",
+              "host": ["{{base_url}}"],
+              "path": ["me"]
+            },
+            "description": "Get the profile of the currently authenticated user"
+          }
+        },
+        {
+          "name": "Get Team Members (Manager Only)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/users/team",
+              "host": ["{{base_url}}"],
+              "path": ["users", "team"]
+            },
+            "description": "Get list of sales agents (Manager only)"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Conversation Endpoints",
+      "item": [
+        {
+          "name": "List All Conversations",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/conversations",
+              "host": ["{{base_url}}"],
+              "path": ["conversations"]
+            },
+            "description": "Get all conversations (filtered by role)"
+          }
+        },
+        {
+          "name": "List Conversations - Filter by Status",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/conversations?status=open",
+              "host": ["{{base_url}}"],
+              "path": ["conversations"],
+              "query": [
+                {
+                  "key": "status",
+                  "value": "open",
+                  "description": "Filter by status: open, pending, closed"
+                }
+              ]
+            },
+            "description": "Get conversations filtered by status"
+          }
+        },
+        {
+          "name": "List Conversations - Unassigned Only",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/conversations?assignedTo=unassigned",
+              "host": ["{{base_url}}"],
+              "path": ["conversations"],
+              "query": [
+                {
+                  "key": "assignedTo",
+                  "value": "unassigned",
+                  "description": "Filter by assignment: unassigned, me, or user UUID"
+                }
+              ]
+            },
+            "description": "Get only unassigned conversations"
+          }
+        },
+        {
+          "name": "List Conversations - Search by Subject",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/conversations?q=enrollment",
+              "host": ["{{base_url}}"],
+              "path": ["conversations"],
+              "query": [
+                {
+                  "key": "q",
+                  "value": "enrollment",
+                  "description": "Search by subject (case-insensitive)"
+                }
+              ]
+            },
+            "description": "Search conversations by subject"
+          }
+        },
+        {
+          "name": "Create Conversation (Student Only)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subject\": \"Question about course registration\",\n  \"message\": \"Hi, I need help registering for the Spring 2026 semester. Can you assist?\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/conversations",
+              "host": ["{{base_url}}"],
+              "path": ["conversations"]
+            },
+            "description": "Create a new conversation (Student only)"
+          }
+        },
+        {
+          "name": "Get Single Conversation",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/conversations/:threadId",
+              "host": ["{{base_url}}"],
+              "path": ["conversations", ":threadId"],
+              "variable": [
+                {
+                  "key": "threadId",
+                  "value": "REPLACE_WITH_THREAD_ID",
+                  "description": "The conversation thread UUID"
+                }
+              ]
+            },
+            "description": "Get conversation details with all messages"
+          }
+        },
+        {
+          "name": "Update Conversation Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"closed\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/conversations/:threadId/status",
+              "host": ["{{base_url}}"],
+              "path": ["conversations", ":threadId", "status"],
+              "variable": [
+                {
+                  "key": "threadId",
+                  "value": "REPLACE_WITH_THREAD_ID",
+                  "description": "The conversation thread UUID"
+                }
+              ]
+            },
+            "description": "Update conversation status (Sales/Manager only). Valid values: open, pending, closed"
+          }
+        },
+        {
+          "name": "Assign Conversation to Self",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assignedTo\": \"YOUR_USER_UUID\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/conversations/:threadId/assign",
+              "host": ["{{base_url}}"],
+              "path": ["conversations", ":threadId", "assign"],
+              "variable": [
+                {
+                  "key": "threadId",
+                  "value": "REPLACE_WITH_THREAD_ID",
+                  "description": "The conversation thread UUID"
+                }
+              ]
+            },
+            "description": "Assign conversation to yourself (Sales/Manager)"
+          }
+        },
+        {
+          "name": "Unassign Conversation (Manager Only)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assignedTo\": null\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/conversations/:threadId/assign",
+              "host": ["{{base_url}}"],
+              "path": ["conversations", ":threadId", "assign"],
+              "variable": [
+                {
+                  "key": "threadId",
+                  "value": "REPLACE_WITH_THREAD_ID",
+                  "description": "The conversation thread UUID"
+                }
+              ]
+            },
+            "description": "Unassign conversation (Manager only)"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Message Endpoints",
+      "item": [
+        {
+          "name": "Send Message",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json",
+                "type": "text"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"body\": \"Thank you for your help! I was able to register successfully.\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/conversations/:threadId/messages",
+              "host": ["{{base_url}}"],
+              "path": ["conversations", ":threadId", "messages"],
+              "variable": [
+                {
+                  "key": "threadId",
+                  "value": "REPLACE_WITH_THREAD_ID",
+                  "description": "The conversation thread UUID"
+                }
+              ]
+            },
+            "description": "Send a new message in a conversation"
+          }
+        }
+      ]
+    }
+  ]
+}

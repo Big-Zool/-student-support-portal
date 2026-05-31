@@ -1,7 +1,7 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-// .wrangler/tmp/bundle-qtgslI/checked-fetch.js
+// .wrangler/tmp/bundle-4nX6jQ/checked-fetch.js
 var urls = /* @__PURE__ */ new Set();
 function checkURL(request, init) {
   const url = request instanceof URL ? request : new URL(
@@ -24,21 +24,6 @@ globalThis.fetch = new Proxy(globalThis.fetch, {
     const [request, init] = argArray;
     checkURL(request, init);
     return Reflect.apply(target, thisArg, argArray);
-  }
-});
-
-// .wrangler/tmp/bundle-qtgslI/strip-cf-connecting-ip-header.js
-function stripCfConnectingIPHeader(input, init) {
-  const request = new Request(input, init);
-  request.headers.delete("CF-Connecting-IP");
-  return request;
-}
-__name(stripCfConnectingIPHeader, "stripCfConnectingIPHeader");
-globalThis.fetch = new Proxy(globalThis.fetch, {
-  apply(target, thisArg, argArray) {
-    return Reflect.apply(target, thisArg, [
-      stripCfConnectingIPHeader.apply(null, argArray)
-    ]);
   }
 });
 
@@ -23388,21 +23373,48 @@ users.get("/", (c) => {
   const profile = c.get("profile");
   return c.json(profile);
 });
+users.get("/team", async (c) => {
+  const profile = c.get("profile");
+  if (profile.role !== "manager") {
+    return c.json({ error: "Only managers can list team members" }, 403);
+  }
+  const supabase = getSupabaseAdmin(c.env);
+  const { data, error } = await supabase.from("profiles").select("id, full_name, role").in("role", ["sales"]).order("full_name", { ascending: true });
+  if (error)
+    return c.json({ error: error.message }, 500);
+  return c.json(data);
+});
 
 // src/routes/conversations.ts
 var conversations = new Hono2();
 conversations.get("/", async (c) => {
   const supabase = getSupabaseAdmin(c.env);
   const profile = c.get("profile");
+  const status = c.req.query("status");
+  const assignedTo = c.req.query("assignedTo");
+  const search = c.req.query("q")?.trim();
   let query = supabase.from("conversation_threads").select(`
       id, subject, status, last_message_at, created_at,
       student:student_id (id, full_name),
       assigned:assigned_to (id, full_name)
     `).order("last_message_at", { ascending: false });
+  if (status && ["open", "pending", "closed"].includes(status)) {
+    query = query.eq("status", status);
+  }
+  if (search) {
+    query = query.ilike("subject", `%${search}%`);
+  }
   if (profile.role === "student") {
     query = query.eq("student_id", profile.id);
   } else if (profile.role === "sales") {
     query = query.or(`assigned_to.eq.${profile.id},assigned_to.is.null`);
+  }
+  if (assignedTo === "unassigned") {
+    query = query.is("assigned_to", null);
+  } else if (assignedTo === "me") {
+    query = query.eq("assigned_to", profile.id);
+  } else if (assignedTo) {
+    query = query.eq("assigned_to", assignedTo);
   }
   const { data, error } = await query;
   if (error)
@@ -23565,11 +23577,12 @@ app.use("/api/*", cors({
 }));
 app.use("/api/*", authMiddleware);
 app.route("/api/me", users);
+app.route("/api/users", users);
 app.route("/api/conversations", conversations);
 app.route("/api/conversations", messages);
 var src_default = app;
 
-// ../node_modules/.pnpm/wrangler@3.114.17_@cloudflare+workers-types@4.20260529.1/node_modules/wrangler/templates/middleware/middleware-ensure-req-body-drained.ts
+// node_modules/wrangler/templates/middleware/middleware-ensure-req-body-drained.ts
 var drainBody = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx) => {
   try {
     return await middlewareCtx.next(request, env);
@@ -23587,7 +23600,7 @@ var drainBody = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "drainBody");
 var middleware_ensure_req_body_drained_default = drainBody;
 
-// ../node_modules/.pnpm/wrangler@3.114.17_@cloudflare+workers-types@4.20260529.1/node_modules/wrangler/templates/middleware/middleware-miniflare3-json-error.ts
+// node_modules/wrangler/templates/middleware/middleware-miniflare3-json-error.ts
 function reduceError(e) {
   return {
     name: e?.name,
@@ -23610,14 +23623,14 @@ var jsonError = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "jsonError");
 var middleware_miniflare3_json_error_default = jsonError;
 
-// .wrangler/tmp/bundle-qtgslI/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-4nX6jQ/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default,
   middleware_miniflare3_json_error_default
 ];
 var middleware_insertion_facade_default = src_default;
 
-// ../node_modules/.pnpm/wrangler@3.114.17_@cloudflare+workers-types@4.20260529.1/node_modules/wrangler/templates/middleware/common.ts
+// node_modules/wrangler/templates/middleware/common.ts
 var __facade_middleware__ = [];
 function __facade_register__(...args) {
   __facade_middleware__.push(...args.flat());
@@ -23642,7 +23655,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-qtgslI/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-4nX6jQ/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -17,59 +17,56 @@ export function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Login form state — using useState instead of useRef so values are always in sync
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+
+  // Signup form state
+  const [signupName, setSignupName] = useState('');
+  const [signupEmail, setSignupEmail] = useState('');
+  const [signupPassword, setSignupPassword] = useState('');
+
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Login form refs
-  const loginEmailRef = useRef<HTMLInputElement>(null);
-  const loginPasswordRef = useRef<HTMLInputElement>(null);
-
-  // Signup form refs
-  const signupNameRef = useRef<HTMLInputElement>(null);
-  const signupEmailRef = useRef<HTMLInputElement>(null);
-  const signupPasswordRef = useRef<HTMLInputElement>(null);
-
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+
+    if (!loginEmail.trim()) {
+      setErrorMsg('Please enter your email address.');
+      return;
+    }
+
     setIsLoading(true);
-
-    const email = loginEmailRef.current?.value ?? '';
-    const password = loginPasswordRef.current?.value ?? '';
-
-    const error = await signIn(email, password);
+    const error = await signIn(loginEmail.trim(), loginPassword);
     if (error) setErrorMsg(error);
-
     setIsLoading(false);
-    // No need to call onLogin() — the AuthContext will update and App.tsx will redirect automatically
   };
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
-    setIsLoading(true);
 
-    const fullName = signupNameRef.current?.value ?? '';
-    const email = signupEmailRef.current?.value ?? '';
-    const password = signupPasswordRef.current?.value ?? '';
-
-    if (password.length < 8) {
-      setErrorMsg('Password must be at least 8 characters.');
-      setIsLoading(false);
+    if (!signupEmail.trim()) {
+      setErrorMsg('Please enter your email address.');
       return;
     }
 
-    const error = await signUp(email, password, fullName);
+    if (signupPassword.length < 8) {
+      setErrorMsg('Password must be at least 8 characters.');
+      return;
+    }
+
+    setIsLoading(true);
+    const error = await signUp(signupEmail.trim(), signupPassword, signupName.trim());
     if (error) {
       setErrorMsg(error);
     } else {
-      // After signup, Supabase may require email confirmation.
-      // For demo purposes we switch to login tab and show a success note.
       setErrorMsg(null);
       setTab('login');
     }
-
     setIsLoading(false);
   };
 
@@ -132,72 +129,95 @@ export function LoginPage() {
               </div>
             )}
 
-            <Tabs value={tab} onValueChange={setTab}>
-              {/* ---- Login Form ---- */}
-              <TabsContent value="login">
-                <form onSubmit={handleLogin} className="flex flex-col gap-4">
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="login-email" className="dark:text-slate-300">Email</Label>
-                    <Input
-                      id="login-email"
-                      type="email"
-                      placeholder="student@demo.com"
-                      ref={loginEmailRef}
-                      required
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="login-password" className="dark:text-slate-300">Password</Label>
-                    <Input
-                      id="login-password"
-                      type="password"
-                      placeholder="••••••••"
-                      ref={loginPasswordRef}
-                      required
-                    />
-                  </div>
-                  <Button type="submit" disabled={isLoading} className="w-full mt-1">
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Signing in…
-                      </>
-                    ) : 'Sign in'}
-                  </Button>
-                  {/* Quick-fill hint for reviewers */}
-                  <p className="text-xs text-slate-400 dark:text-slate-500 text-center">
-                    Demo: student@demo.com · sales1@demo.com · manager@demo.com
-                    <br />Password: <span className="font-mono">demo1234</span>
-                  </p>
-                </form>
-              </TabsContent>
-
-              {/* ---- Signup Form ---- */}
-              <TabsContent value="signup">
-                <form onSubmit={handleSignup} className="flex flex-col gap-4">
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="signup-name" className="dark:text-slate-300">Full name</Label>
-                    <Input id="signup-name" type="text" placeholder="Emma Chen" ref={signupNameRef} required />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="signup-email" className="dark:text-slate-300">Email</Label>
-                    <Input id="signup-email" type="email" placeholder="student@example.com" ref={signupEmailRef} required />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <Label htmlFor="signup-password" className="dark:text-slate-300">Password</Label>
-                    <Input id="signup-password" type="password" placeholder="Min. 8 characters" ref={signupPasswordRef} required />
-                  </div>
-                  <Button type="submit" disabled={isLoading} className="w-full mt-1">
-                    {isLoading ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Creating account…
-                      </>
-                    ) : 'Create account'}
-                  </Button>
-                </form>
-              </TabsContent>
-            </Tabs>
+            {tab === 'login' ? (
+              /* ---- Login Form ---- */
+              <form onSubmit={handleLogin} className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="login-email" className="dark:text-slate-300">Email</Label>
+                  <Input
+                    id="login-email"
+                    type="email"
+                    placeholder="student@demo.com"
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    required
+                    autoComplete="email"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="login-password" className="dark:text-slate-300">Password</Label>
+                  <Input
+                    id="login-password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    required
+                    autoComplete="current-password"
+                  />
+                </div>
+                <Button type="submit" disabled={isLoading} className="w-full mt-1">
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Signing in…
+                    </>
+                  ) : 'Sign in'}
+                </Button>
+                <p className="text-xs text-slate-400 dark:text-slate-500 text-center">
+                  Demo: student@demo.com · sales1@demo.com · manager@demo.com
+                  <br />Password: <span className="font-mono">demo1234</span>
+                </p>
+              </form>
+            ) : (
+              /* ---- Signup Form ---- */
+              <form onSubmit={handleSignup} className="flex flex-col gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="signup-name" className="dark:text-slate-300">Full name</Label>
+                  <Input
+                    id="signup-name"
+                    type="text"
+                    placeholder="Emma Chen"
+                    value={signupName}
+                    onChange={(e) => setSignupName(e.target.value)}
+                    required
+                    autoComplete="name"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="signup-email" className="dark:text-slate-300">Email</Label>
+                  <Input
+                    id="signup-email"
+                    type="email"
+                    placeholder="student@example.com"
+                    value={signupEmail}
+                    onChange={(e) => setSignupEmail(e.target.value)}
+                    required
+                    autoComplete="email"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="signup-password" className="dark:text-slate-300">Password</Label>
+                  <Input
+                    id="signup-password"
+                    type="password"
+                    placeholder="Min. 8 characters"
+                    value={signupPassword}
+                    onChange={(e) => setSignupPassword(e.target.value)}
+                    required
+                    autoComplete="new-password"
+                  />
+                </div>
+                <Button type="submit" disabled={isLoading} className="w-full mt-1">
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Creating account…
+                    </>
+                  ) : 'Create account'}
+                </Button>
+              </form>
+            )}
           </CardContent>
         </Card>
 

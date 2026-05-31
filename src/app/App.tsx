@@ -1,3 +1,4 @@
+console.log('APP RENDERED');
 import { ThemeProvider } from 'next-themes';
 import { AuthProvider, useAuth } from './auth/AuthContext';
 import { LoginPage } from './components/LoginPage';
@@ -9,6 +10,7 @@ import { Loader2 } from 'lucide-react';
 // Think of it like a traffic cop: it checks who you are and sends you to the right page.
 function AppContent() {
   const { user, profile, loading, signOut } = useAuth();
+  console.log('AUTH STATE:', { user, profile, loading });
 
   // While we're checking if there's an active session, show a spinner
   if (loading) {

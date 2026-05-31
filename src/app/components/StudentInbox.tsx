@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { AlertCircle, Plus, MessageSquare, Sun, Moon } from 'lucide-react';
 import { useTheme } from 'next-themes';
@@ -13,6 +13,7 @@ import { NewConversationDialog } from './NewConversationDialog';
 import type { ConversationPreview, ConversationStatus } from './types';
 import { cn } from './ui/utils';
 import { getConversations, createConversation, type ApiConversationThread } from '../../lib/apiClient';
+import { subscribeToConversationList } from '../../lib/realtime';
 
 function ConversationSkeleton() {
   return (
@@ -33,6 +34,7 @@ function ConversationSkeleton() {
 
 export function StudentInbox() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedPreview, setSelectedPreview] = useState<ConversationPreview | null>(null);
   const [statusFilter, setStatusFilter] = useState<ConversationStatus | 'all'>('all');
   const [newConvOpen, setNewConvOpen] = useState(false);
   const [mobileView, setMobileView] = useState<'list' | 'chat'>('list');
@@ -44,12 +46,28 @@ export function StudentInbox() {
     queryFn: () => getConversations({ status: statusFilter }),
   });
 
+  useEffect(() => {
+    return subscribeToConversationList(() => {
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    });
+  }, [queryClient]);
+
   const createMutation = useMutation({
     mutationFn: ({ subject, message }: { subject: string; message: string }) =>
       createConversation(subject, message),
     onSuccess: (newThread) => {
       queryClient.invalidateQueries({ queryKey: ['conversations'] });
+      const preview: ConversationPreview = {
+        id: newThread.id,
+        subject: newThread.subject,
+        status: newThread.status,
+        studentName: newThread.student?.full_name || 'Student',
+        assignee: newThread.assigned?.full_name || null,
+        assigneeId: newThread.assigned?.id || null,
+        lastMessageTime: new Date(newThread.last_message_at),
+      };
       setSelectedId(newThread.id);
+      setSelectedPreview(preview);
       setMobileView('chat');
     },
   });
@@ -67,10 +85,27 @@ export function StudentInbox() {
 
   const filtered = mappedConversations;
 
-  const selected = mappedConversations.find((c) => c.id === selectedId) ?? null;
+  // Keep the preview from click so the chat panel stays populated when filters change.
+  const selected =
+    mappedConversations.find((c) => c.id === selectedId) ?? selectedPreview;
 
-  const handleSelectConv = (id: string) => {
-    setSelectedId(id);
+  useEffect(() => {
+    if (isLoading || mappedConversations.length === 0) return;
+
+    if (selectedId) {
+      const match = mappedConversations.find((c) => c.id === selectedId);
+      if (match) setSelectedPreview(match);
+      return;
+    }
+
+    const first = mappedConversations[0];
+    setSelectedId(first.id);
+    setSelectedPreview(first);
+  }, [mappedConversations, isLoading, selectedId]);
+
+  const handleSelectConv = (conv: ConversationPreview) => {
+    setSelectedId(conv.id);
+    setSelectedPreview(conv);
     setMobileView('chat');
   };
 
@@ -158,7 +193,7 @@ export function StudentInbox() {
                 {filtered.map((conv) => (
                   <button
                     key={conv.id}
-                    onClick={() => handleSelectConv(conv.id)}
+                    onClick={() => handleSelectConv(conv)}
                     className={cn(
                       'w-full text-left p-3 rounded-lg border transition-all duration-100',
                       selectedId === conv.id

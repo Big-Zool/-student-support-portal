@@ -2,7 +2,6 @@ import { useRef, useEffect, useState } from 'react';
 import { format } from 'date-fns';
 import { AlertCircle, Send, ArrowLeft, UserCheck, RefreshCw } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { ScrollArea } from './ui/scroll-area';
 import { Button } from './ui/button';
 import { Textarea } from './ui/textarea';
 import { Avatar, AvatarFallback } from './ui/avatar';
@@ -12,7 +11,9 @@ import { StatusBadge } from './StatusBadge';
 import { ReassignDialog } from './ReassignDialog';
 import type { ConversationPreview, ConversationStatus, Role } from './types';
 import { cn } from './ui/utils';
-import { getConversation, sendMessage, type ApiMessage } from '../../lib/apiClient';
+import { getConversation, sendMessage, type ApiConversationDetail, type ApiMessage } from '../../lib/apiClient';
+import { subscribeToConversationThread } from '../../lib/realtime';
+import { useAuth } from '../auth/AuthContext';
 
 interface ChatAreaProps {
   conversation: ConversationPreview | null;
@@ -73,16 +74,62 @@ export function ChatArea({
   const [reassignOpen, setReassignOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
+  const { profile } = useAuth();
 
-  const { data: fullConv, isLoading, isError, error } = useQuery({
+  const { data: fullConv, isPending, isError, error } = useQuery({
     queryKey: ['conversation', previewConv?.id],
     queryFn: () => getConversation(previewConv!.id),
     enabled: !!previewConv?.id,
   });
 
+  useEffect(() => {
+    if (!previewConv?.id) return;
+
+    return subscribeToConversationThread(previewConv.id, () => {
+      queryClient.invalidateQueries({ queryKey: ['conversation', previewConv.id] });
+      queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    });
+  }, [previewConv?.id, queryClient]);
+
   const sendMutation = useMutation({
     mutationFn: (body: string) => sendMessage(previewConv!.id, body),
-    onSuccess: () => {
+    onMutate: async (body) => {
+      const queryKey = ['conversation', previewConv!.id];
+      await queryClient.cancelQueries({ queryKey });
+
+      const previous = queryClient.getQueryData<ApiConversationDetail>(queryKey);
+
+      queryClient.setQueryData<ApiConversationDetail>(queryKey, (current) => {
+        if (!current) return current;
+
+        const optimisticMessage: ApiMessage = {
+          id: `pending-${Date.now()}`,
+          body,
+          created_at: new Date().toISOString(),
+          sender_type: role === 'student' ? 'student' : 'team',
+          sender: profile
+            ? {
+                id: profile.id,
+                full_name: profile.full_name,
+                role: profile.role,
+              }
+            : null,
+        };
+
+        return {
+          ...current,
+          messages: [...current.messages, optimisticMessage],
+        };
+      });
+
+      return { previous };
+    },
+    onError: (_error, _body, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(['conversation', previewConv!.id], context.previous);
+      }
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['conversation', previewConv!.id] });
       queryClient.invalidateQueries({ queryKey: ['conversations'] }); // Refresh list to show new lastMessage time
     },
@@ -141,7 +188,7 @@ export function ChatArea({
     );
   }
 
-  if (isLoading || !conversation) return <SkeletonChat />;
+  if (isPending || !conversation) return <SkeletonChat />;
 
   const isUnassigned = !conversation.assignee;
   const showSalesActions = role === 'sales' || role === 'manager';
@@ -223,8 +270,8 @@ export function ChatArea({
         )}
       </div>
 
-      {/* Messages */}
-      <ScrollArea className="flex-1 min-h-0">
+      {/* Messages — native scroll avoids Radix ScrollArea collapsing to 0 height inside flex layouts */}
+      <div className="flex-1 min-h-0 overflow-y-auto">
         <div className="px-4 py-4 flex flex-col gap-4">
           {conversation.messages?.map((msg: ApiMessage) => {
             const isStudent = msg.sender_type === 'student';
@@ -264,7 +311,7 @@ export function ChatArea({
           })}
           <div ref={bottomRef} />
         </div>
-      </ScrollArea>
+      </div>
 
       {/* Reply box */}
       <div className="flex-shrink-0 border-t border-slate-100 dark:border-slate-800 px-4 py-3 bg-white dark:bg-slate-900">
@@ -278,7 +325,7 @@ export function ChatArea({
                 ? 'This conversation is closed.'
                 : 'Type a message… (⌘↵ to send)'
             }
-            disabled={conversation.status === 'closed' || sendMutation.isPending}
+            disabled={conversation.status === 'closed'}
             rows={2}
             className="flex-1 resize-none text-sm min-h-[60px] max-h-32"
           />
